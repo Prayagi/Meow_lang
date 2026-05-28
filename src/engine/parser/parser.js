@@ -58,6 +58,10 @@ export function parse(tokens) {
     return tokens[current];
   }
 
+  function peekNext() {
+    return tokens[current + 1] || tokens[tokens.length - 1];
+  }
+
   function previous() {
     return tokens[current - 1];
   }
@@ -86,10 +90,11 @@ export function parse(tokens) {
     return false;
   }
 
-  function consume(type, message) {
+  function consume(type, message, code, meta) {
     if (check(type)) return advance();
     const tok = peek();
-    throw new MeowParserError(message, tok.line, tok.column);
+    const extra = Object.assign({}, meta || {}, { found: tok.lexeme });
+    throw new MeowParserError(message, tok.line, tok.column, code, extra);
   }
 
   // ── Grammar rules ─────────────────────────────────────
@@ -98,15 +103,15 @@ export function parse(tokens) {
   function program() {
     const tok = peek();
 
-    // Allow (and skip) pounce declarations before paw for top‑level functions
+    // Allow (and skip) scratch declarations before paw for top‑level functions
     const topFunctions = [];
-    while (check(TokenType.POUNCE)) {
-      topFunctions.push(pounceDeclaration());
+    while (check(TokenType.SCRATCH)) {
+      topFunctions.push(scratchDeclaration());
     }
 
-    consume(TokenType.PAW, "Expected 'paw' at the start of the program");
+    consume(TokenType.PAW, "Expected 'paw' at the start of the program", 'MISSING_PAW', { expected: 'paw' });
     const pawTok = previous();
-    consume(TokenType.LEFT_BRACE, "Expected '{' after 'paw'");
+    consume(TokenType.LEFT_BRACE, "Expected '{' after 'paw'", 'MISSING_LEFT_BRACE', { expected: '{' });
 
     const body = [];
     // Prepend any top‑level functions into the body
@@ -116,7 +121,7 @@ export function parse(tokens) {
       body.push(declaration());
     }
 
-    consume(TokenType.RIGHT_BRACE, "Expected '}' to close the 'paw' block");
+    consume(TokenType.RIGHT_BRACE, "Expected '}' to close the 'paw' block", 'MISSING_RIGHT_BRACE', { expected: '}' });
 
     if (!isAtEnd()) {
       const extra = peek();
@@ -127,33 +132,33 @@ export function parse(tokens) {
     return node('Program', { body }, pawTok);
   }
 
-  /** declaration → pounceDecl | statement */
+  /** declaration → scratchDecl | statement */
   function declaration() {
-    if (check(TokenType.POUNCE)) return pounceDeclaration();
+    if (check(TokenType.SCRATCH)) return scratchDeclaration();
     return statement();
   }
 
-  /** pounceDecl → "pounce" IDENTIFIER "(" params? ")" "{" declaration* "}" */
-  function pounceDeclaration() {
-    const kw = advance(); // consume POUNCE
-    const nameTok = consume(TokenType.IDENTIFIER, "Expected identifier (function name) after 'pounce'");
-    consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
+  /** scratchDecl → "scratch" IDENTIFIER "(" params? ")" "{" declaration* "}" */
+  function scratchDeclaration() {
+    const kw = advance(); // consume SCRATCH
+    const nameTok = consume(TokenType.IDENTIFIER, "Expected identifier (function name) after 'scratch'", 'MISSING_IDENTIFIER');
+    consume(TokenType.LEFT_PAREN, "Expected '(' after function name", 'MISSING_LEFT_PAREN', { expected: '(' });
 
     const params = [];
     if (!check(TokenType.RIGHT_PAREN)) {
       do {
-        const p = consume(TokenType.IDENTIFIER, 'Expected parameter name');
+        const p = consume(TokenType.IDENTIFIER, 'Expected parameter name', 'MISSING_IDENTIFIER');
         params.push(p.lexeme);
       } while (matchAny(TokenType.COMMA));
     }
-    consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters");
-    consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
+    consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters", 'MISSING_RIGHT_PAREN', { expected: ')' });
+    consume(TokenType.LEFT_BRACE, "Expected '{' before function body", 'MISSING_LEFT_BRACE', { expected: '{' });
 
     const body = [];
     while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
       body.push(declaration());
     }
-    consume(TokenType.RIGHT_BRACE, "Expected '}' after function body");
+    consume(TokenType.RIGHT_BRACE, "Expected '}' after function body", 'MISSING_RIGHT_BRACE', { expected: '}' });
 
     return node('FunctionDeclaration', {
       name: nameTok.lexeme,
@@ -162,28 +167,22 @@ export function parse(tokens) {
     }, kw);
   }
 
-  /** statement → meowStmt | meowmeowStmt | hissStmt | scratchStmt | purrStmt | exprStmt */
+  /** statement → meowDecl | hissStmt | chaseStmt | scratchDecl | purrStmt | bringStmt | exprStmt */
   function statement() {
-    if (check(TokenType.MEOW))     return meowStatement();
-    if (check(TokenType.MEOWMEOW)) return meowmeowStatement();
+    if (check(TokenType.MEOW))     return meowDeclaration();
     if (check(TokenType.HISS))     return hissStatement();
-    if (check(TokenType.SCRATCH))  return scratchStatement();
+    if (check(TokenType.CHASE))    return chaseStatement();
+    if (check(TokenType.SCRATCH))  return scratchDeclaration();
     if (check(TokenType.PURR))     return purrStatement();
+    if (check(TokenType.BRING))    return bringStatement();
     return expressionStatement();
   }
 
-  /** meowStmt → "meow" expression */
-  function meowStatement() {
+  /** meowDecl → "meow" IDENTIFIER "=" expression */
+  function meowDeclaration() {
     const kw = advance(); // consume MEOW
-    const expr = expression();
-    return node('MeowStatement', { expression: expr }, kw);
-  }
-
-  /** meowmeowStmt → "meowmeow" IDENTIFIER "=" expression */
-  function meowmeowStatement() {
-    const kw = advance(); // consume MEOWMEOW
-    const nameTok = consume(TokenType.IDENTIFIER, "Expected identifier after 'meowmeow'");
-    consume(TokenType.EQUAL, "Expected '=' after variable name in 'meowmeow' declaration");
+    const nameTok = consume(TokenType.IDENTIFIER, "Expected identifier after 'meow'", 'MISSING_IDENTIFIER');
+    consume(TokenType.EQUAL, "Expected '=' after variable name in 'meow' declaration", 'MISSING_EQUAL', { expected: '=' });
     const init = expression();
     return node('VariableDeclaration', {
       name: nameTok.lexeme,
@@ -194,54 +193,68 @@ export function parse(tokens) {
   /** hissStmt → "hiss" "(" expression ")" "{" declaration* "}" ("mew" "{" declaration* "}")? */
   function hissStatement() {
     const kw = advance(); // consume HISS
-    consume(TokenType.LEFT_PAREN, "Expected '(' after 'hiss'");
+    consume(TokenType.LEFT_PAREN, "Expected '(' after 'hiss'", 'MISSING_LEFT_PAREN', { expected: '(' });
     const condition = expression();
-    consume(TokenType.RIGHT_PAREN, "Expected ')' after hiss condition");
-    consume(TokenType.LEFT_BRACE, "Expected '{' after hiss condition");
+    consume(TokenType.RIGHT_PAREN, "Expected ')' after hiss condition", 'MISSING_RIGHT_PAREN', { expected: ')' });
+    consume(TokenType.LEFT_BRACE, "Expected '{' after hiss condition", 'MISSING_LEFT_BRACE', { expected: '{' });
 
     const consequent = [];
     while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
       consequent.push(declaration());
     }
-    consume(TokenType.RIGHT_BRACE, "Expected '}' after hiss body");
+    consume(TokenType.RIGHT_BRACE, "Expected '}' after hiss body", 'MISSING_RIGHT_BRACE', { expected: '}' });
 
     let alternate = null;
     if (matchAny(TokenType.MEW)) {
-      // Could be `mew { }` or chained `mew hiss (...) { }`
-      // We'll support only `mew { }` for simplicity as per spec
-      consume(TokenType.LEFT_BRACE, "Expected '{' after 'mew'");
-      const elseBody = [];
-      while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
-        elseBody.push(declaration());
+      // Could be `mew { }`, `mew hiss (...) { }`, `else { }` or `else hiss (...) { }`
+      if (check(TokenType.HISS)) {
+        alternate = [hissStatement()];
+      } else {
+        consume(TokenType.LEFT_BRACE, "Expected '{' after else/mew clause", 'MISSING_LEFT_BRACE', { expected: '{' });
+        const elseBody = [];
+        while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
+          elseBody.push(declaration());
+        }
+        consume(TokenType.RIGHT_BRACE, "Expected '}' after else/mew body", 'MISSING_RIGHT_BRACE', { expected: '}' });
+        alternate = elseBody;
       }
-      consume(TokenType.RIGHT_BRACE, "Expected '}' after mew body");
-      alternate = elseBody;
     }
 
     return node('IfStatement', { condition, consequent, alternate }, kw);
   }
 
-  /** scratchStmt → "scratch" "(" expression ")" "{" declaration* "}" */
-  function scratchStatement() {
-    const kw = advance(); // consume SCRATCH
-    consume(TokenType.LEFT_PAREN, "Expected '(' after 'scratch'");
+  /** chaseStmt → "chase" "(" expression ")" "{" declaration* "}" */
+  function chaseStatement() {
+    const kw = advance(); // consume CHASE
+    consume(TokenType.LEFT_PAREN, "Expected '(' after 'chase'", 'MISSING_LEFT_PAREN', { expected: '(' });
     const condition = expression();
-    consume(TokenType.RIGHT_PAREN, "Expected ')' after scratch condition");
-    consume(TokenType.LEFT_BRACE, "Expected '{' after scratch condition");
+    consume(TokenType.RIGHT_PAREN, "Expected ')' after chase condition", 'MISSING_RIGHT_PAREN', { expected: ')' });
+    consume(TokenType.LEFT_BRACE, "Expected '{' after chase condition", 'MISSING_LEFT_BRACE', { expected: '{' });
 
     const body = [];
     while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
       body.push(declaration());
     }
-    consume(TokenType.RIGHT_BRACE, "Expected '}' after scratch body");
+    consume(TokenType.RIGHT_BRACE, "Expected '}' after chase body", 'MISSING_RIGHT_BRACE', { expected: '}' });
 
     return node('WhileStatement', { condition, body }, kw);
   }
 
-  /** purrStmt → "purr" expression? */
+  /** purrStmt → "purr" "(" expression? ")" */
   function purrStatement() {
     const kw = advance(); // consume PURR
-    // If the next token is } or EOF we treat it as `purr null`
+    consume(TokenType.LEFT_PAREN, "Expected '(' after 'purr'", 'MISSING_LEFT_PAREN', { expected: '(' });
+    let expr = null;
+    if (!check(TokenType.RIGHT_PAREN)) {
+      expr = expression();
+    }
+    consume(TokenType.RIGHT_PAREN, "Expected ')' after print expression", 'MISSING_RIGHT_PAREN', { expected: ')' });
+    return node('PurrStatement', { expression: expr }, kw);
+  }
+
+  /** bringStmt → "bring" expression? */
+  function bringStatement() {
+    const kw = advance(); // consume BRING
     let value = null;
     if (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
       value = expression();
@@ -413,11 +426,12 @@ export function parse(tokens) {
     // Nothing matched — error
     const tok = peek();
     if (isAtEnd()) {
-      throw new MeowParserError('Unexpected end of input', tok.line, tok.column);
+      throw new MeowParserError('Unexpected end of input', tok.line, tok.column, 'UNEXPECTED_EOF', { found: 'EOF' });
     }
     throw new MeowParserError(
       `Unexpected token '${tok.lexeme}'`,
       tok.line, tok.column,
+      'UNEXPECTED_TOKEN', { found: tok.lexeme }
     );
   }
 

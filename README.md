@@ -6,7 +6,6 @@ Learn programming through an interactive, gamified experience with **Meow**, a c
 
 - **Meow Language** — A simple, cat-themed programming language for learning variables, loops, functions, and logic
 - **Interactive Playground** — Write and run code instantly with live output
-- **AI-Powered Tutor** — Get instant explanations and debugging help powered by Groq (Llama 3)
 - **Pet Companion System** — Raise and care for your cat as you progress through missions
 - **Gamification** — Earn XP, unlock achievements, and level up your coding skills
 - **Progressive Missions** — Start simple, tackle increasingly complex challenges
@@ -332,13 +331,12 @@ purr("Pounce!")
 - **Frontend:** Next.js 16, React 19, Framer Motion
 - **State Management:** Zustand
 - **Editor:** CodeMirror
-- **AI Tutor:** Groq API + Vercel AI SDK
 - **Styling:** Catppuccin color scheme
 
 ## Pages
 
 - **Dashboard** — Track progress and pet stats
-- **Playground** — Write and run Meow code with AI explanations
+- **Playground** — Write and run Meow code instantly in the browser
 - **Missions** — Complete coding challenges
 - **Shop** — Customize your cat companion
 

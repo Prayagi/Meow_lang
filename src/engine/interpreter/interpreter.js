@@ -31,7 +31,7 @@ export function evaluate(ast) {
 
     function checkNumberOperands(operator, left, right, node) {
         if (typeof left === 'number' && typeof right === 'number') return;
-        throw new MeowRuntimeError(`Operands must be numbers for operator '${operator}'.`, node.line, node.column);
+        throw new MeowRuntimeError(`Operands must be numbers for operator '${operator}'.`, node.line, node.column, 'TYPE_ERROR', { operator });
     }
 
     function visit(node, env) {
@@ -70,7 +70,7 @@ export function evaluate(ast) {
                     case '+': 
                         if (typeof left === 'number' && typeof right === 'number') return left + right;
                         if (typeof left === 'string' || typeof right === 'string') return String(left) + String(right);
-                        throw new MeowRuntimeError(`Cannot use '+' on these types.`, node.line, node.column);
+                        throw new MeowRuntimeError(`Cannot use '+' on these types.`, node.line, node.column, 'TYPE_ERROR', { operator: '+' });
                     case '-':
                         checkNumberOperands(op, left, right, node);
                         return left - right;
@@ -79,7 +79,7 @@ export function evaluate(ast) {
                         return left * right;
                     case '/':
                         checkNumberOperands(op, left, right, node);
-                        if (right === 0) throw new MeowRuntimeError('Division by zero.', node.line, node.column);
+                        if (right === 0) throw new MeowRuntimeError('Division by zero.', node.line, node.column, 'DIVISION_BY_ZERO');
                         return left / right;
                     case '%':
                         checkNumberOperands(op, left, right, node);
@@ -117,7 +117,7 @@ export function evaluate(ast) {
                 const operand = visit(node.operand, env);
                 if (node.operator === '-') {
                     if (typeof operand !== 'number') {
-                        throw new MeowRuntimeError(`Operand must be a number for '-'.`, node.line, node.column);
+                        throw new MeowRuntimeError(`Operand must be a number for '-'.`, node.line, node.column, 'TYPE_ERROR', { operator: '-' });
                     }
                     return -operand;
                 }
@@ -132,9 +132,9 @@ export function evaluate(ast) {
             case 'Identifier':
                 return env.get(node.name, node);
             
-            case 'MeowStatement':
-                const meowVal = visit(node.expression, env);
-                output.push(String(meowVal));
+            case 'PurrStatement':
+                const purrVal = node.expression ? visit(node.expression, env) : '';
+                output.push(String(purrVal));
                 return null;
                 
             case 'IfStatement':
@@ -152,7 +152,7 @@ export function evaluate(ast) {
                 let steps = 0;
                 while (isTruthy(visit(node.condition, env))) {
                     if (steps++ > 10000) {
-                        throw new MeowRuntimeError('Infinite loop detected (step limit reached).', node.line, node.column);
+                        throw new MeowRuntimeError('Infinite loop detected (step limit reached).', node.line, node.column, 'INFINITE_LOOP');
                     }
                     const blockEnv = new Environment(env);
                     for (const stmt of node.body) visit(stmt, blockEnv);
@@ -190,23 +190,30 @@ export function evaluate(ast) {
                 const args = node.arguments.map(arg => visit(arg, env));
                 
                 if (typeof callee !== 'function') {
-                    throw new MeowRuntimeError('Not a function.', node.callee.line, node.callee.column);
+                    throw new MeowRuntimeError('Not a function.', node.callee.line, node.callee.column, 'NOT_A_FUNCTION', { found: typeof callee });
                 }
                 if (args.length !== callee.arity) {
-                    throw new MeowRuntimeError(`Expected ${callee.arity} argument(s) but got ${args.length}.`, node.line, node.column);
+                    throw new MeowRuntimeError(`Expected ${callee.arity} argument(s) but got ${args.length}.`, node.line, node.column, 'ARGUMENT_MISMATCH', { expected: callee.arity, found: args.length });
                 }
                 return callee(args);
 
             default:
-                throw new MeowRuntimeError(`Unknown node type: ${node.type}`, node.line, node.column);
+                throw new MeowRuntimeError(`Unknown node type: ${node.type}`, node.line, node.column, 'UNKNOWN_NODE', { nodeType: node.type });
         }
     }
 
     try {
         visit(ast, globalEnv);
     } catch (err) {
+        // If a ReturnException bubbles to the top level it means the
+        // user used `purr` outside of a `pounce` function. Previously
+        // we converted this into a runtime error which prevented the
+        // program from running and repeatedly showed the same error
+        // even for minor edits. Treat a top-level return as a
+        // graceful program exit instead: stop execution and return
+        // whatever output has been produced so far.
         if (err instanceof ReturnException) {
-            throw new MeowRuntimeError("Return statement outside function");
+            return output;
         }
         throw err;
     }

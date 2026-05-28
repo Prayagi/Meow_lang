@@ -10,47 +10,56 @@
  */
 export class MeowError extends Error {
   /**
-   * @param {string} kind       – error category (Lexer / Parser / Runtime)
+   * @param {string} kind       – error category (Lexer | Parser | Runtime)
    * @param {string} message    – technical description
    * @param {number} line       – 1‑based line (0 if unknown)
    * @param {number} column     – 1‑based column (0 if unknown)
+   * @param {string} code       – machine friendly error code (e.g. MISSING_PAW)
+   * @param {object} meta       – optional extra structured info (found/expected/...)
    */
-  constructor(kind, message, line = 0, column = 0) {
+  constructor(kind, message, line = 0, column = 0, code = undefined, meta = undefined) {
     super(message);
     this.name      = 'MeowError';
     this.kind      = kind;
-    this.line       = line;
-    this.column     = column;
+    this.line      = line;
+    this.column    = column;
+    this.code      = code || mapMessageToErrorCode(kind, message);
+    this.meta      = meta || {};
     this.catMessage = translateToCat(kind, message);
   }
 
+  /**
+   * Return a structured error object intended for the UI / AI.
+   */
   toErrorObject() {
     return {
-      message:    this.message,
-      line:       this.line,
-      column:     this.column,
-      catMessage: this.catMessage,
+      type:    this.code || `${this.kind.toUpperCase()}_ERROR`,
+      kind:    this.kind,
+      message: this.message,
+      line:    this.line,
+      column:  this.column,
+      meta:    this.meta || {},
     };
   }
 }
 
 export class MeowLexerError extends MeowError {
-  constructor(message, line, column) {
-    super('Lexer', message, line, column);
+  constructor(message, line, column, code, meta) {
+    super('Lexer', message, line, column, code, meta);
     this.name = 'MeowLexerError';
   }
 }
 
 export class MeowParserError extends MeowError {
-  constructor(message, line, column) {
-    super('Parser', message, line, column);
+  constructor(message, line, column, code, meta) {
+    super('Parser', message, line, column, code, meta);
     this.name = 'MeowParserError';
   }
 }
 
 export class MeowRuntimeError extends MeowError {
-  constructor(message, line, column) {
-    super('Runtime', message, line, column);
+  constructor(message, line, column, code, meta) {
+    super('Runtime', message, line, column, code, meta);
     this.name = 'MeowRuntimeError';
   }
 }
@@ -108,7 +117,7 @@ const CAT_TRANSLATIONS = [
   {
     pattern: /expected.*'='/i,
     cat: '✏️ You forgot the = sign. How am I supposed to assign anything without it?',
-    hint: 'Use meowmeow name = value to declare a variable.',
+    hint: 'Use meow name = value to declare a variable.',
   },
   {
     pattern: /unexpected token/i,
@@ -125,12 +134,12 @@ const CAT_TRANSLATIONS = [
   {
     pattern: /undefined variable/i,
     cat: '🔍 I can\'t find that variable anywhere — and I looked under the couch!',
-    hint: 'Declare it with meowmeow before using it.',
+    hint: 'Declare it with meow before using it.',
   },
   {
     pattern: /not a function/i,
     cat: '🐟 You tried to call something that isn\'t a function. That\'s like trying to eat a toy fish!',
-    hint: 'Make sure you declared the function with pounce before calling it.',
+    hint: 'Make sure you declared the function with scratch before calling it.',
   },
   {
     pattern: /argument.*mismatch|expected \d+ argument/i,
@@ -145,7 +154,7 @@ const CAT_TRANSLATIONS = [
   {
     pattern: /step limit|infinite loop|too many steps/i,
     cat: '😵‍💫 Your program ran around in circles like a cat chasing its tail! I had to stop it.',
-    hint: 'Check your scratch loops — make sure the condition eventually becomes false.',
+    hint: 'Check your chase loops — make sure the condition eventually becomes false.',
   },
   {
     pattern: /recursion|call stack|stack overflow|depth/i,
@@ -163,9 +172,9 @@ const CAT_TRANSLATIONS = [
     hint: 'Make sure the operand types match what the operator expects.',
   },
   {
-    pattern: /purr.*outside.*function|return.*outside/i,
-    cat: '🚫 You can\'t purr (return) outside a function! That\'s like coughing up a hairball in public.',
-    hint: 'Move the purr statement inside a pounce function.',
+    pattern: /bring.*outside.*function|return.*outside/i,
+    cat: '🚫 You can\'t bring (return) outside a function! That\'s like coughing up a hairball in public.',
+    hint: 'Move the bring statement inside a scratch function.',
   },
 ];
 
@@ -199,6 +208,31 @@ function translateToCat(kind, message) {
   const fallbackCat  = FALLBACK_CATS[kind]  || FALLBACK_CATS.Runtime;
   const fallbackHint = FALLBACK_HINTS[kind] || FALLBACK_HINTS.Runtime;
   return `${fallbackCat}\n💡 Hint: ${fallbackHint}`;
+}
+
+/**
+ * Map a human message to a compact error code. This is used when the
+ * creator of the MeowError didn't explicitly provide a code.
+ */
+function mapMessageToErrorCode(kind, message) {
+  if (!message) return undefined;
+  const m = message.toLowerCase();
+  if (/expected.*paw/.test(m)) return 'MISSING_PAW';
+  if (/expected '\{'/.test(m) || /expected\{/.test(m)) return 'MISSING_LEFT_BRACE';
+  if (/expected '\}'/.test(m) || /expected\}/.test(m)) return 'MISSING_RIGHT_BRACE';
+  if (/expected '\('/.test(m)) return 'MISSING_LEFT_PAREN';
+  if (/expected '\)'/.test(m)) return 'MISSING_RIGHT_PAREN';
+  if (/expected identifier/i.test(m)) return 'MISSING_IDENTIFIER';
+  if (/expected '='/.test(m) || /expected '='/i.test(m)) return 'MISSING_EQUAL';
+  if (/unexpected token/i.test(m)) return 'UNEXPECTED_TOKEN';
+  if (/unexpected end/i.test(m)) return 'UNEXPECTED_EOF';
+  if (/undefined variable/i.test(m)) return 'UNDEFINED_VARIABLE';
+  if (/not a function/i.test(m)) return 'NOT_A_FUNCTION';
+  if (/division by zero/i.test(m)) return 'DIVISION_BY_ZERO';
+  if (/infinite loop/i.test(m) || /step limit/i.test(m)) return 'INFINITE_LOOP';
+  if (/return statement outside function/i.test(m)) return 'RETURN_OUTSIDE_FUNCTION';
+  if (/operands must be numbers/i.test(m) || /cannot use '\+'/.test(m)) return 'TYPE_ERROR';
+  return undefined;
 }
 
 /**

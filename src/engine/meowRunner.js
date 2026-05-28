@@ -1,6 +1,7 @@
 import { tokenize } from './lexer/lexer.js';
 import { parse } from './parser/parser.js';
 import { evaluate } from './interpreter/interpreter.js';
+import { MeowError } from './errors.js';
 
 /**
  * Orchestrates the execution of Meow language code.
@@ -34,22 +35,35 @@ export function runMeowCode(sourceCode) {
         result.success = true;
     } catch (error) {
         result.success = false;
-        // Check if it's a known engine error (MeowLexerError or MeowParserError)
-        if (error.line !== undefined) {
-            result.errors.push({
-                type: error.name,
-                message: error.message,
-                line: error.line,
-                column: error.column
-            });
+        // If the engine produced a MeowError subclass, use its structured form.
+        if (error instanceof MeowError) {
+            const errObj = error.toErrorObject();
+            // Attach a small code context (2 lines before/after) if we have a line number
+            if (errObj.line && errObj.line > 0) {
+                const ctx = getCodeContext(sourceCode, errObj.line, 2);
+                errObj.codeContext = ctx;
+            }
+            result.errors.push(errObj);
         } else {
             // General JS error
             result.errors.push({
                 type: 'InternalEngineError',
-                message: error.message || 'An unknown error occurred during execution.',
+                message: error && error.message ? error.message : 'An unknown error occurred during execution.',
             });
         }
     }
 
     return result;
+}
+
+function getCodeContext(source, line, radius = 2) {
+    const lines = source.split(/\r?\n/);
+    const idx = Math.max(0, line - 1);
+    const start = Math.max(0, idx - radius);
+    const end = Math.min(lines.length - 1, idx + radius);
+    const snippet = [];
+    for (let i = start; i <= end; i++) {
+        snippet.push({ line: i + 1, text: lines[i] });
+    }
+    return snippet;
 }

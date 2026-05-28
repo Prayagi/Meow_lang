@@ -20,7 +20,7 @@ export class Environment {
         
         const line = node ? node.line : 0;
         const col = node ? node.column : 0;
-        throw new MeowRuntimeError(`Undefined variable '${name}'.`, line, col);
+        throw new MeowRuntimeError(`Undefined variable '${name}'.`, line, col, 'UNDEFINED_VARIABLE', { name });
     }
 
     assign(name, value, node = null) {
@@ -35,6 +35,6 @@ export class Environment {
         
         const line = node ? node.line : 0;
         const col = node ? node.column : 0;
-        throw new MeowRuntimeError(`Undefined variable '${name}'.`, line, col);
+        throw new MeowRuntimeError(`Undefined variable '${name}'.`, line, col, 'UNDEFINED_VARIABLE', { name });
     }
 }

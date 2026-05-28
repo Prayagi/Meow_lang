@@ -14,13 +14,13 @@ export const TokenType = Object.freeze({
 
   // ── Keywords ──────────────────────────────────────────────
   PAW:          'PAW',          // program entry  paw { }
-  MEOW:         'MEOW',         // print          meow expr
-  MEOWMEOW:     'MEOWMEOW',     // var decl       meowmeow x = expr
+  MEOW:         'MEOW',         // var decl       meow x = expr
   HISS:         'HISS',         // if             hiss (cond) { }
-  MEW:          'MEW',          // else           mew { }
-  SCRATCH:      'SCRATCH',      // while          scratch (cond) { }
-  POUNCE:       'POUNCE',       // function       pounce name(params) { }
-  PURR:         'PURR',         // return         purr expr
+  MEW:          'MEW',          // else           mew { } or else { }
+  CHASE:        'CHASE',        // while          chase (cond) { }
+  SCRATCH:      'SCRATCH',      // function       scratch name(params) { }
+  BRING:        'BRING',        // return         bring expr
+  PURR:         'PURR',         // print          purr(expr)
   FUR:          'FUR',          // true
   HAIRBALL:     'HAIRBALL',     // false
   CATNIP:       'CATNIP',       // null
@@ -61,17 +61,19 @@ export const TokenType = Object.freeze({
 
 /**
  * Map keyword strings → TokenType.
- * "meowmeow" must come BEFORE "meow" when scanning
- * (handled by the lexer's maximal‑munch rule).
+ * "meowmeow" is handled for backwards compatibility.
  */
 export const KEYWORDS = Object.freeze({
   paw:       TokenType.PAW,
-  meowmeow:  TokenType.MEOWMEOW,
-  meow:      TokenType.MEOW,
+  meowmeow:  TokenType.MEOW,        // fallback var decl
+  meow:      TokenType.MEOW,        // standard var decl
   hiss:      TokenType.HISS,
   mew:       TokenType.MEW,
+  else:      TokenType.MEW,         // fallback else clause
+  chase:     TokenType.CHASE,
   scratch:   TokenType.SCRATCH,
-  pounce:    TokenType.POUNCE,
+  pounce:    TokenType.SCRATCH,     // fallback function declaration
+  bring:     TokenType.BRING,
   purr:      TokenType.PURR,
   fur:       TokenType.FUR,
   hairball:  TokenType.HAIRBALL,
